@@ -1,35 +1,39 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
+#include <iostream>
+#include <intrin.h>
 
-#define NTHREADS 5
+using namespace std;
 
-void *myFun(void *x)
+int _tmain(int argc, _TCHAR* argv[])
 {
-  int tid;
-  tid = *((int *) x);
-  printf("Hi from thread %d!\n", tid);
-  return NULL;
+    // Get extended ids.
+    int CPUInfo[4] = {-1};
+    __cpuid(CPUInfo, 0x80000000);
+    unsigned int nExIds = CPUInfo[0];
+
+    // Get the information associated with each extended ID.
+    char CPUBrandString[0x40] = { 0 };
+    for( unsigned int i=0x80000000; i<=nExIds; ++i)
+    {
+        __cpuid(CPUInfo, i);
+
+        // Interpret CPU brand string and cache information.
+        if  (i == 0x80000002)
+        {
+            memcpy( CPUBrandString,
+            CPUInfo,
+            sizeof(CPUInfo));
+        }
+        else if( i == 0x80000003 )
+        {
+            memcpy( CPUBrandString + 16,
+            CPUInfo,
+            sizeof(CPUInfo));
+        }
+        else if( i == 0x80000004 )
+        {
+            memcpy(CPUBrandString + 32, CPUInfo, sizeof(CPUInfo));
+        }
 }
 
-int main(int argc, char *argv[])
-{
-  pthread_t threads[NTHREADS];
-  int thread_args[NTHREADS];
-  int rc, i;
-
-  /* spawn the threads */
-  for (i=0; i<NTHREADS; ++i)
-    {
-      thread_args[i] = i;
-      printf("spawning thread %d\n", i);
-      rc = pthread_create(&threads[i], NULL, myFun, (void *) &thread_args[i]);
-    }
-
-  /* wait for threads to finish */
-  for (i=0; i<NTHREADS; ++i) {
-    rc = pthread_join(threads[i], NULL);
-  }
-
-  return 1;
+    cout << "Cpu String: " << CPUBrandString;
 }
