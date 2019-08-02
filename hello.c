@@ -1,7 +1,12 @@
 #include <stdio.h>
-int main()
-{
-   // printf() displays the string inside quotation
-   printf("Hello, World!");
-   return 0;
-}
+   #include <mpi.h>
+
+   main(int argc, char **argv) 
+   {
+      int ierr;
+
+      ierr = MPI_Init(&argc, &argv);
+      printf("Hello world\n"); 
+         
+      ierr = MPI_Finalize();
+   }
