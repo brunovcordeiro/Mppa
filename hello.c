@@ -1,24 +1,3 @@
-Skip to content
-Search or jump to…
-
-Pull requests
-Issues
-Marketplace
-Explore
- 
-@brunovcordeiro 
-Learn Git and GitHub without any code!
-Using the Hello World guide, you’ll start a branch, write comments, and open a pull request.
-
-
-4
-02nanvix/utils
- Code Issues 10 Pull requests 0 Security Insights
-utils/arch/mppa256.sh
-@ppenna ppenna Enhancement: Flexible Output Parsing
-fbd7378 on 13 Sep
-128 lines (118 sloc)  3.04 KB
-  
 #
 # MIT License
 #
@@ -50,8 +29,8 @@ export K1_TOOLCHAIN_DIR="/usr/local/k1tools"
 #
 function setup_toolchain
 {
-	# Nothing to do.
-	echo ""
+    # Nothing to do.
+    echo ""
 }
 
 #
@@ -59,16 +38,16 @@ function setup_toolchain
 #
 function build
 {
-	local image=$1
-	local bindir=$2
-	local binary=$3
-	local iobin=$binary-k1bio
-	local nodebin=$binary-k1bdp
+    local image=$1
+    local bindir=$2
+    local binary=$3
+    local iobin=$binary-k1bio
+    local nodebin=$binary-k1bdp
 
-	$K1_TOOLCHAIN_DIR/bin/k1-create-multibinary \
-		--boot $bindir/$iobin                   \
-		--clusters $bindir/$nodebin             \
-		-T $image -f
+    $K1_TOOLCHAIN_DIR/bin/k1-create-multibinary \
+        --boot $bindir/$iobin                   \
+        --clusters $bindir/$nodebin             \
+        -T $image -f
 }
 
 #
@@ -76,19 +55,19 @@ function build
 #
 function run
 {
-	local image=$1
-	local bindir=$2
-	local bin=$3
-	local target=$4
-	local variant=$5
-	local mode=$6
-	local timeout=$7
-	local args=$8
-	local execfile=""
+    local image=$1
+    local bindir=$2
+    local bin=$3
+    local target=$4
+    local variant=$5
+    local mode=$6
+    local timeout=$7
+    local args=$8
+    local execfile=""
 
-	case $variant in
-		"all")
-			          execfile="\
+    case $variant in
+        "all")
+                       execfile="\
                 --exec-file=IODDR0:$bindir/$bin-k1bio    \
                 --exec-file=IODDR1:$bindir/$bin-k1bio    \
                 --exec-file=Cluster0:$bindir/$bin-k1bdp  \
@@ -108,46 +87,46 @@ function run
                 --exec-file=Cluster14:$bindir/$bin-k1bdp \
                 --exec-file=Cluster15:$bindir/$bin-k1bdp \
             "
-			;;
-		"iocluster")
-			execfile="--exec-file=IODDR0:$bindir/$bin-k1bio"
-			;;
-		"ccluster")
-			execfile="--exec-file=Cluster0:$bindir/$bin-k1bdp"
-			;;
-	esac
+            ;;
+        "iocluster")
+            execfile="--exec-file=IODDR0:$bindir/$bin-k1bio"
+            ;;
+        "ccluster")
+            execfile="--exec-file=Cluster0:$bindir/$bin-k1bdp"
+            ;;
+    esac
 
-	if [ $mode == "--debug" ];
-	then
-		$K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-			--gdb                            \
-			--multibinary=$image             \
-			$execfile                        \
-			-- $args
-	else
-		if [ ! -z $timeout ];
-		then
-			timeout --foreground $timeout        \
-			$K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-				--multibinary=$image             \
-				$execfile                        \
-				-- $args                         \
-			|& tee $OUTFILE
-			line=$(cat $OUTFILE | tail -1 )
-			if [[ "$line" = *"powering off"* ]] || [[ $line == *"halting"* ]];
-			then
-				echo "Succeed !"
-			else
-				echo "Failed !"
-				return -1
-			fi
-		else
-			$K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-				--multibinary=$image             \
-				$execfile                        \
-				-- $args
-		fi
-	fi
+    if [ $mode == "--debug" ];
+    then
+        $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
+            --gdb                            \
+            --multibinary=$image             \
+            $execfile                        \
+            -- $args
+    else
+        if [ ! -z $timeout ];
+        then
+            timeout --foreground $timeout        \
+            $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
+                --multibinary=$image             \
+                $execfile                        \
+                -- $args                         \
+            |& tee $OUTFILE
+            line=$(cat $OUTFILE | tail -1 )
+            if [[ "$line" = *"powering off"* ]] || [[ $line == *"halting"* ]];
+            then
+                echo "Succeed !"
+            else
+                echo "Failed !"
+                return -1
+            fi
+        else
+            $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
+                --multibinary=$image             \
+                $execfile                        \
+                -- $args
+        fi
+    fi
 }
 
 #
@@ -155,24 +134,12 @@ function run
 #
 function run_sim
 {
-	local bin=$1
-	local args=$2
+    local bin=$1
+    local args=$2
 
-	$K1_TOOLCHAIN_DIR/bin/k1-cluster \
-		--mboard=$BOARD           \
-		--march=$ARCH             \
-		--bootcluster=node0       \
-		-- $bin $args
+    $K1_TOOLCHAIN_DIR/bin/k1-cluster \
+        --mboard=$BOARD           \
+        --march=$ARCH             \
+        --bootcluster=node0       \
+        -- $bin $args
 }
-© 2019 GitHub, Inc.
-Terms
-Privacy
-Security
-Status
-Help
-Contact GitHub
-Pricing
-API
-Training
-Blog
-About
