@@ -156,7 +156,7 @@ int main(int argc, const char *argv[])
 	{
 		kprintf(HLINE);
 
-			barrier_setup(1, 1);
+			barrier_setup(1, 3);
 
 				/* Slaves waiting 6 seconds because the boot of the IO is slow. */
 				if (nodenum != MASTER_NODENUM)
