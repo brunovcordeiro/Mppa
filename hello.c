@@ -1,145 +1,185 @@
-#
-# MIT License
-#
-# Copyright(c) 2018 Pedro Henrique Penna <pedrohenriquepenna@gmail.com>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
+/*
+ * MIT License
+ *
+ * Copyright(c) 2018 Pedro Henrique Penna <pedrohenriquepenna@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 
-export K1_TOOLCHAIN_DIR="/usr/local/k1tools"
+#include <kbench.h>
+#include <nanvix/sys/thread.h>
 
-#
-# Sets up development tools.
-#
-function setup_toolchain
+/**
+ * @name Benchmark Parameters
+ */
+/**@{*/
+#define NTHREADS_MIN                1  /**< Minimum Number of Working Threads */
+#define NTHREADS_MAX  (THREAD_MAX - 1) /**< Maximum Number of Working Threads */
+#define MESSAGE_SIZE  1024
+#define MASTER_NODENUM 0 //! IODDR0
+#define SLAVE_NODENUM  8 //! Cluster0
+/**@}*/
+
+/*============================================================================*
+ * Benchmark                                                                  *
+ *============================================================================*/
+
+
+void do_master(void)
 {
-    # Nothing to do.
-    echo ""
+	int local;
+	int remote;
+	int portal_in;
+	int portal_out;
+	char message_in[MESSAGE_SIZE];
+	char message_out[MESSAGE_SIZE];
+
+	local  = MASTER_NODENUM;
+	remote = SLAVE_NODENUM;
+
+	kprintf("Master: Init!");
+
+	kmemset(message_in, -1, MESSAGE_SIZE);
+	kmemset(message_out, MASTER_NODENUM, MESSAGE_SIZE);
+
+	KASSERT((portal_in = kportal_create(local)) >= 0);
+	KASSERT((portal_out = kportal_open(local, remote)) >= 0);
+
+	kprintf("Master: Input and Output portals are ready.");
+
+	barrier();
+
+		kprintf("Master: Reading message!");
+
+		/* Read operations. */
+		KASSERT(kportal_allow(portal_in, remote) == 0);
+		KASSERT(kportal_read(portal_in, message_in, MESSAGE_SIZE) == MESSAGE_SIZE);
+
+		for (int k = 0; k < MESSAGE_SIZE; k++)
+			KASSERT(message_in[k] == SLAVE_NODENUM);
+
+		kprintf("Master: Message OK!");
+
+		kprintf("Master: Sending message!");
+
+		/* Write operations. */
+		KASSERT(kportal_write(portal_out, message_out, MESSAGE_SIZE) >= MESSAGE_SIZE);
+
+	KASSERT(kportal_close(portal_out) == 0);
+	KASSERT(kportal_unlink(portal_in) == 0);
+
+	kprintf("Master: Exit!");
 }
 
-#
-# Builds system image.
-#
-function build
+void do_slave(void)
 {
-    local image=$1
-    local bindir=$2
-    local binary=$3
-    local iobin=$binary-k1bio
-    local nodebin=$binary-k1bdp
+	int local;
+	int remote;
+	int portal_in;
+	int portal_out;
+	char message_in[MESSAGE_SIZE];
+	char message_out[MESSAGE_SIZE];
 
-    $K1_TOOLCHAIN_DIR/bin/k1-create-multibinary \
-        --boot $bindir/$iobin                   \
-        --clusters $bindir/$nodebin             \
-        -T $image -f
+	local  = SLAVE_NODENUM;
+	remote = MASTER_NODENUM;
+
+	kprintf("Slave: Init!");
+
+	kmemset(message_in, -1, MESSAGE_SIZE);
+	kmemset(message_out, SLAVE_NODENUM, MESSAGE_SIZE);
+
+	KASSERT((portal_in = kportal_create(local)) >= 0);
+	KASSERT((portal_out = kportal_open(local, remote)) >= 0);
+
+	kprintf("Slave: Input and Output portals are ready.");
+
+	barrier();
+
+		kprintf("Slave: Sending message!");
+
+		/* Write operations. */
+		KASSERT(kportal_write(portal_out, message_out, MESSAGE_SIZE) >= MESSAGE_SIZE);
+
+		kprintf("Slave: Reading message!");
+
+		/* Read operations. */
+		KASSERT(kportal_allow(portal_in, remote) == 0);
+		KASSERT(kportal_read(portal_in, message_in, MESSAGE_SIZE) == MESSAGE_SIZE);
+
+		for (int j = 0; j < MESSAGE_SIZE; j++)
+			KASSERT(message_in[j] == MASTER_NODENUM);
+
+		kprintf("Slave: Message OK!");
+
+	KASSERT(kportal_close(portal_out) == 0);
+	KASSERT(kportal_unlink(portal_in) == 0);
+
+	kprintf("Slave: Exit!");
 }
 
-#
-# Runs a binary in the platform.
-#
-function run
+/*============================================================================*
+ * Benchmark Driver                                                           *
+ *============================================================================*/
+
+/**
+ * @brief Fork-Join Benchmark
+ *
+ * @param argc Argument counter.
+ * @param argv Argument variables.
+ */
+int main(int argc, const char *argv[])
 {
-    local image=$1
-    local bindir=$2
-    local bin=$3
-    local target=$4
-    local variant=$5
-    local mode=$6
-    local timeout=$7
-    local args=$8
-    local execfile=""
+	int nodenum;
 
-    case $variant in
-        "all")
-                       execfile="\
-                --exec-file=IODDR0:$bindir/$bin-k1bio    \
-                --exec-file=IODDR1:$bindir/$bin-k1bio    \
-                --exec-file=Cluster0:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster1:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster2:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster3:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster4:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster5:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster6:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster7:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster8:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster9:$bindir/$bin-k1bdp  \
-                --exec-file=Cluster10:$bindir/$bin-k1bdp \
-                --exec-file=Cluster11:$bindir/$bin-k1bdp \
-                --exec-file=Cluster12:$bindir/$bin-k1bdp \
-                --exec-file=Cluster13:$bindir/$bin-k1bdp \
-                --exec-file=Cluster14:$bindir/$bin-k1bdp \
-                --exec-file=Cluster15:$bindir/$bin-k1bdp \
-            "
-            ;;
-        "iocluster")
-            execfile="--exec-file=IODDR0:$bindir/$bin-k1bio"
-            ;;
-        "ccluster")
-            execfile="--exec-file=Cluster0:$bindir/$bin-k1bdp"
-            ;;
-    esac
+	((void) argc);
+	((void) argv);
 
-    if [ $mode == "--debug" ];
-    then
-        $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-            --gdb                            \
-            --multibinary=$image             \
-            $execfile                        \
-            -- $args
-    else
-        if [ ! -z $timeout ];
-        then
-            timeout --foreground $timeout        \
-            $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-                --multibinary=$image             \
-                $execfile                        \
-                -- $args                         \
-            |& tee $OUTFILE
-            line=$(cat $OUTFILE | tail -1 )
-            if [[ "$line" = *"powering off"* ]] || [[ $line == *"halting"* ]];
-            then
-                echo "Succeed !"
-            else
-                echo "Failed !"
-                return -1
-            fi
-        else
-            $K1_TOOLCHAIN_DIR/bin/k1-jtag-runner \
-                --multibinary=$image             \
-                $execfile                        \
-                -- $args
-        fi
-    fi
-}
+	nodenum = knode_get_num();
 
-#
-# Runs a binary in the platform (simulator).
-#
-function run_sim
-{
-    local bin=$1
-    local args=$2
+	if (nodenum == MASTER_NODENUM || nodenum == SLAVE_NODENUM)
+	{
+		kprintf(HLINE);
 
-    $K1_TOOLCHAIN_DIR/bin/k1-cluster \
-        --mboard=$BOARD           \
-        --march=$ARCH             \
-        --bootcluster=node0       \
-        -- $bin $args
+			barrier_setup(1, 1);
+
+				/* Slaves waiting 6 seconds because the boot of the IO is slow. */
+				if (nodenum != MASTER_NODENUM)
+				{
+					timer(5 * CLUSTER_FREQ);
+					timer(CLUSTER_FREQ);
+				}
+
+				/* Everyone waits everyone. */
+				barrier();
+
+					if (nodenum == MASTER_NODENUM)
+						do_master();
+					else
+						do_slave();
+
+				/* Everyone waits everyone. */
+				barrier();
+
+			barrier_cleanup();
+
+		kprintf(HLINE);
+	}
+
+	return (0);
 }
